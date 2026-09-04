@@ -103,16 +103,6 @@
             font-size: 0.75rem;
             color: #7a9bb3;
         }
-        .login-info .btn-register {
-            background: transparent;
-            border: none;
-            color: #1f5f7a;
-            cursor: pointer;
-            font-weight: 600;
-            text-decoration: underline;
-            font-size: 0.75rem;
-        }
-        .login-info .btn-register:hover { color: #f5b342; }
 
         .app-container {
             max-width: 900px;
@@ -896,46 +886,17 @@
     <form id="loginForm" autocomplete="off">
         <div class="form-group">
             <label><i class="fas fa-user"></i> Username</label>
-            <input type="text" id="loginUsername" placeholder="Masukkan username">
+            <input type="text" id="loginUsername" placeholder="Masukkan username" value="razalfa">
         </div>
         <div class="form-group">
             <label><i class="fas fa-lock"></i> Password</label>
-            <input type="password" id="loginPassword" placeholder="Masukkan password">
+            <input type="password" id="loginPassword" placeholder="Masukkan password" value="admin123">
         </div>
         <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt"></i> Masuk</button>
         <div class="login-error" id="loginError"><i class="fas fa-exclamation-circle"></i> Username atau password salah!</div>
     </form>
     <div class="login-info">
-        Belum punya akun? <button class="btn-register" id="btnRegister">Daftar Sekarang</button>
-    </div>
-</div>
-
-<!-- REGISTER -->
-<div class="login-container" id="registerPage">
-    <h2><i class="fas fa-user-plus" style="color:#f5b342;"></i> Daftar Akun</h2>
-    <div class="subtitle"><i class="fas fa-graduation-cap"></i> Buat akun baru</div>
-    <form id="registerForm" autocomplete="off">
-        <div class="form-group">
-            <label><i class="fas fa-user"></i> Username</label>
-            <input type="text" id="registerUsername" placeholder="Buat username" required>
-        </div>
-        <div class="form-group">
-            <label><i class="fas fa-envelope"></i> Email</label>
-            <input type="email" id="registerEmail" placeholder="Email aktif" required>
-        </div>
-        <div class="form-group">
-            <label><i class="fas fa-lock"></i> Password</label>
-            <input type="password" id="registerPassword" placeholder="Minimal 6 karakter" required minlength="6">
-        </div>
-        <div class="form-group">
-            <label><i class="fas fa-lock"></i> Konfirmasi Password</label>
-            <input type="password" id="registerConfirm" placeholder="Ulangi password" required>
-        </div>
-        <button type="submit" class="btn-login"><i class="fas fa-user-plus"></i> Daftar</button>
-        <div class="login-error" id="registerError"><i class="fas fa-exclamation-circle"></i> Gagal mendaftar!</div>
-    </form>
-    <div class="login-info">
-        Sudah punya akun? <button class="btn-register" id="btnBackLogin">Login</button>
+        <i class="fas fa-info-circle"></i> Login: razalfa / admin123
     </div>
 </div>
 
@@ -1054,7 +1015,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <script>
     // ===== KONFIGURASI SUPABASE =====
     // GANTI DENGAN URL DAN KEY SUPABASE ANDA
@@ -1062,27 +1022,19 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZmtpZ2h3eGRlbmNpaGdsYWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MjE2NTUsImV4cCI6MjEwNDA5NzY1NX0.8ErYoCFK5t8HDuuCl3fw4wFdSI-3BqniXmIxjSXVCVQ';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // ===== KEAMANAN =====
-    const SALT = 'RazalfaAindiSiregar2024!@#$';
-
-    function hashPassword(password) {
-        return CryptoJS.SHA256(password + SALT).toString(CryptoJS.enc.Hex);
-    }
-
     (function() {
         // ===== DOM ELEMENTS =====
         const loginPage = document.getElementById('loginPage');
-        const registerPage = document.getElementById('registerPage');
         const appContainer = document.getElementById('appContainer');
         const loginForm = document.getElementById('loginForm');
-        const registerForm = document.getElementById('registerForm');
         const loginError = document.getElementById('loginError');
-        const registerError = document.getElementById('registerError');
         const logoutBtn = document.getElementById('logoutBtn');
         const loadingOverlay = document.getElementById('loadingOverlay');
-        const btnRegister = document.getElementById('btnRegister');
-        const btnBackLogin = document.getElementById('btnBackLogin');
-        const userDisplay = document.getElementById('userDisplay');
+
+        // ===== LOGIN SEDERHANA (TANPA HASH) =====
+        // User yang valid: username = 'razalfa', password = 'admin123'
+        const VALID_USERNAME = 'razalfa';
+        const VALID_PASSWORD = 'admin123';
 
         function showLoading() {
             loadingOverlay.classList.add('active');
@@ -1092,209 +1044,53 @@
             loadingOverlay.classList.remove('active');
         }
 
-        // ===== AUTH FUNCTIONS =====
-        async function registerUser(username, email, password) {
-            try {
-                // Cek username sudah ada
-                const { data: existingUser, error: checkError } = await supabase
-                    .from('users')
-                    .select('username')
-                    .eq('username', username)
-                    .maybeSingle();
-
-                if (checkError && checkError.code !== 'PGRST116') {
-                    throw checkError;
-                }
-
-                if (existingUser) {
-                    registerError.textContent = 'Username sudah digunakan!';
-                    registerError.classList.add('show');
-                    return false;
-                }
-
-                // Cek email sudah ada
-                const { data: existingEmail, error: checkEmailError } = await supabase
-                    .from('users')
-                    .select('email')
-                    .eq('email', email)
-                    .maybeSingle();
-
-                if (checkEmailError && checkEmailError.code !== 'PGRST116') {
-                    throw checkEmailError;
-                }
-
-                if (existingEmail) {
-                    registerError.textContent = 'Email sudah terdaftar!';
-                    registerError.classList.add('show');
-                    return false;
-                }
-
-                // Hash password
-                const hashedPassword = hashPassword(password);
-
-                // Insert user
-                const { data, error } = await supabase
-                    .from('users')
-                    .insert([{
-                        username: username,
-                        email: email,
-                        password: hashedPassword,
-                        created_at: new Date().toISOString()
-                    }])
-                    .select();
-
-                if (error) throw error;
-
-                registerError.classList.remove('show');
-                alert('Registrasi berhasil! Silakan login.');
-                showLoginPage();
-                return true;
-            } catch (error) {
-                console.error('Register error:', error);
-                registerError.textContent = 'Gagal registrasi: ' + error.message;
-                registerError.classList.add('show');
-                return false;
-            }
-        }
-
-        async function loginUser(username, password) {
-            try {
-                const hashedPassword = hashPassword(password);
-
-                const { data, error } = await supabase
-                    .from('users')
-                    .select('id, username, email, role')
-                    .eq('username', username)
-                    .eq('password', hashedPassword)
-                    .maybeSingle();
-
-                if (error) throw error;
-
-                if (!data) {
-                    loginError.textContent = 'Username atau password salah!';
-                    loginError.classList.add('show');
-                    return false;
-                }
-
-                // Login berhasil
-                localStorage.setItem('tabunganSiswa_session', 'logged_in');
-                localStorage.setItem('tabunganSiswa_user', JSON.stringify({
-                    id: data.id,
-                    username: data.username,
-                    email: data.email,
-                    role: data.role || 'user'
-                }));
-
-                loginError.classList.remove('show');
-                showAppPage(data.username);
-                return true;
-            } catch (error) {
-                console.error('Login error:', error);
-                loginError.textContent = 'Error: ' + error.message;
-                loginError.classList.add('show');
-                return false;
-            }
-        }
-
-        function logoutUser() {
-            localStorage.removeItem('tabunganSiswa_session');
-            localStorage.removeItem('tabunganSiswa_user');
-            appContainer.classList.remove('active');
-            loginPage.classList.add('active');
-            registerPage.classList.remove('active');
-            document.getElementById('loginPassword').value = '';
-            loginError.classList.remove('show');
-        }
-
-        function showLoginPage() {
-            loginPage.classList.add('active');
-            registerPage.classList.remove('active');
-            appContainer.classList.remove('active');
-        }
-
-        function showRegisterPage() {
-            loginPage.classList.remove('active');
-            registerPage.classList.add('active');
-            appContainer.classList.remove('active');
-            registerError.classList.remove('show');
-        }
-
-        function showAppPage(username) {
-            loginPage.classList.remove('active');
-            registerPage.classList.remove('active');
-            appContainer.classList.add('active');
-            userDisplay.textContent = username || 'User';
-        }
-
         function checkSession() {
             const session = localStorage.getItem('tabunganSiswa_session');
-            const userData = localStorage.getItem('tabunganSiswa_user');
-            if (session === 'logged_in' && userData) {
-                try {
-                    const user = JSON.parse(userData);
-                    showAppPage(user.username);
-                    return true;
-                } catch (e) {
-                    return false;
-                }
+            if (session === 'logged_in') {
+                loginPage.classList.remove('active');
+                appContainer.classList.add('active');
+                return true;
             }
             return false;
         }
 
-        // ===== EVENT LISTENERS =====
-        loginForm.addEventListener('submit', async function(e) {
+        function doLogin(username, password) {
+            if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+                localStorage.setItem('tabunganSiswa_session', 'logged_in');
+                loginPage.classList.remove('active');
+                appContainer.classList.add('active');
+                loginError.classList.remove('show');
+                initApp();
+                return true;
+            } else {
+                loginError.classList.add('show');
+                return false;
+            }
+        }
+
+        function doLogout() {
+            localStorage.removeItem('tabunganSiswa_session');
+            appContainer.classList.remove('active');
+            loginPage.classList.add('active');
+            document.getElementById('loginPassword').value = '';
+            loginError.classList.remove('show');
+        }
+
+        loginForm.addEventListener('submit', function(e) {
             e.preventDefault();
             const username = document.getElementById('loginUsername').value.trim();
             const password = document.getElementById('loginPassword').value.trim();
-            
-            if (!username || !password) {
-                loginError.textContent = 'Username dan password wajib diisi!';
-                loginError.classList.add('show');
-                return;
-            }
-
-            showLoading();
-            const success = await loginUser(username, password);
-            hideLoading();
-            
-            if (success) {
-                initApp();
-            }
+            doLogin(username, password);
         });
 
-        registerForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const username = document.getElementById('registerUsername').value.trim();
-            const email = document.getElementById('registerEmail').value.trim();
-            const password = document.getElementById('registerPassword').value;
-            const confirm = document.getElementById('registerConfirm').value;
+        logoutBtn.addEventListener('click', doLogout);
 
-            if (!username || !email || !password || !confirm) {
-                registerError.textContent = 'Semua field wajib diisi!';
-                registerError.classList.add('show');
-                return;
-            }
-
-            if (password.length < 6) {
-                registerError.textContent = 'Password minimal 6 karakter!';
-                registerError.classList.add('show');
-                return;
-            }
-
-            if (password !== confirm) {
-                registerError.textContent = 'Password tidak cocok!';
-                registerError.classList.add('show');
-                return;
-            }
-
-            showLoading();
-            await registerUser(username, email, password);
-            hideLoading();
-        });
-
-        btnRegister.addEventListener('click', showRegisterPage);
-        btnBackLogin.addEventListener('click', showLoginPage);
-        logoutBtn.addEventListener('click', logoutUser);
+        if (checkSession()) {
+            initApp();
+        } else {
+            loginPage.classList.add('active');
+            appContainer.classList.remove('active');
+        }
 
         // ===== APP LOGIC =====
         async function initApp() {
@@ -1954,11 +1750,10 @@
             initApp();
         } else {
             loginPage.classList.add('active');
-            registerPage.classList.remove('active');
             appContainer.classList.remove('active');
         }
 
-        console.log('🔐 Tabungan Murid dengan Login Database siap!');
+        console.log('🔐 Tabungan Murid siap!');
     })();
 </script>
 </body>
