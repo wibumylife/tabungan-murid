@@ -110,6 +110,7 @@
             cursor: pointer;
             font-weight: 600;
             text-decoration: underline;
+            font-size: 0.75rem;
         }
         .login-info .btn-register:hover { color: #f5b342; }
 
@@ -895,20 +896,17 @@
     <form id="loginForm" autocomplete="off">
         <div class="form-group">
             <label><i class="fas fa-user"></i> Username</label>
-            <input type="text" id="loginUsername" placeholder="Masukkan username" value="razalfa">
+            <input type="text" id="loginUsername" placeholder="Masukkan username">
         </div>
         <div class="form-group">
             <label><i class="fas fa-lock"></i> Password</label>
-            <input type="password" id="loginPassword" placeholder="Masukkan password" value="admin123">
+            <input type="password" id="loginPassword" placeholder="Masukkan password">
         </div>
         <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt"></i> Masuk</button>
         <div class="login-error" id="loginError"><i class="fas fa-exclamation-circle"></i> Username atau password salah!</div>
     </form>
     <div class="login-info">
         Belum punya akun? <button class="btn-register" id="btnRegister">Daftar Sekarang</button>
-    </div>
-    <div class="login-info" style="margin-top:0.5rem; font-size:0.7rem; color:#7a9bb3;">
-        <i class="fas fa-shield-alt"></i> Sistem keamanan terenkripsi
     </div>
 </div>
 
@@ -1059,6 +1057,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 <script>
     // ===== KONFIGURASI SUPABASE =====
+    // GANTI DENGAN URL DAN KEY SUPABASE ANDA
     const SUPABASE_URL = 'https://vmfkighwxdencihglaei.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZmtpZ2h3eGRlbmNpaGdsYWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MjE2NTUsImV4cCI6MjEwNDA5NzY1NX0.8ErYoCFK5t8HDuuCl3fw4wFdSI-3BqniXmIxjSXVCVQ';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1096,6 +1095,7 @@
         // ===== AUTH FUNCTIONS =====
         async function registerUser(username, email, password) {
             try {
+                // Cek username sudah ada
                 const { data: existingUser, error: checkError } = await supabase
                     .from('users')
                     .select('username')
@@ -1112,6 +1112,7 @@
                     return false;
                 }
 
+                // Cek email sudah ada
                 const { data: existingEmail, error: checkEmailError } = await supabase
                     .from('users')
                     .select('email')
@@ -1128,8 +1129,10 @@
                     return false;
                 }
 
+                // Hash password
                 const hashedPassword = hashPassword(password);
 
+                // Insert user
                 const { data, error } = await supabase
                     .from('users')
                     .insert([{
@@ -1168,10 +1171,12 @@
                 if (error) throw error;
 
                 if (!data) {
+                    loginError.textContent = 'Username atau password salah!';
                     loginError.classList.add('show');
                     return false;
                 }
 
+                // Login berhasil
                 localStorage.setItem('tabunganSiswa_session', 'logged_in');
                 localStorage.setItem('tabunganSiswa_user', JSON.stringify({
                     id: data.id,
@@ -1211,6 +1216,7 @@
             loginPage.classList.remove('active');
             registerPage.classList.add('active');
             appContainer.classList.remove('active');
+            registerError.classList.remove('show');
         }
 
         function showAppPage(username) {
