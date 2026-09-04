@@ -20,7 +20,106 @@
             justify-content: center;
             padding: 1rem;
         }
-        
+
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            z-index: 9999;
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .connection-status.online {
+            background: rgba(31, 138, 112, 0.9);
+            color: white;
+            border: 1px solid rgba(31, 138, 112, 0.3);
+        }
+        .connection-status.offline {
+            background: rgba(196, 79, 92, 0.9);
+            color: white;
+            border: 1px solid rgba(196, 79, 92, 0.3);
+        }
+        .connection-status.checking {
+            background: rgba(245, 179, 66, 0.9);
+            color: white;
+            border: 1px solid rgba(245, 179, 66, 0.3);
+        }
+        .connection-status .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .connection-status.online .dot {
+            background: #8affc4;
+        }
+        .connection-status.offline .dot {
+            background: #ff8a8a;
+        }
+        .connection-status.checking .dot {
+            background: #fff;
+            animation: blink 0.8s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+
+        /* NOTIFICATION */
+        .notification {
+            position: fixed;
+            top: 70px;
+            right: 10px;
+            padding: 12px 20px;
+            border-radius: 16px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 9998;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            max-width: 350px;
+            transform: translateX(120%);
+            transition: transform 0.4s ease;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .notification.show {
+            transform: translateX(0);
+        }
+        .notification.success {
+            background: rgba(31, 138, 112, 0.15);
+            color: #1f8a70;
+            border-left: 4px solid #1f8a70;
+        }
+        .notification.error {
+            background: rgba(196, 79, 92, 0.15);
+            color: #bf4b5a;
+            border-left: 4px solid #bf4b5a;
+        }
+        .notification.warning {
+            background: rgba(245, 179, 66, 0.15);
+            color: #b8860b;
+            border-left: 4px solid #f5b342;
+        }
+        .notification .close-notif {
+            background: transparent;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-left: 12px;
+            opacity: 0.6;
+        }
+        .notification .close-notif:hover {
+            opacity: 1;
+        }
+
         .login-container {
             max-width: 420px;
             width: 100%;
@@ -839,6 +938,8 @@
             .transaksi-nominal { font-size: 0.8rem; }
             .riwayat-header h3 { font-size: 0.85rem; }
             .modal-box { padding: 1.5rem; border-radius: 28px; }
+            .connection-status { font-size: 0.65rem; padding: 4px 12px; top: 5px; right: 5px; }
+            .notification { max-width: 280px; font-size: 0.75rem; top: 55px; right: 5px; padding: 8px 14px; }
         }
 
         @media (max-width: 480px) {
@@ -870,6 +971,18 @@
     </style>
 </head>
 <body>
+
+<!-- CONNECTION STATUS -->
+<div class="connection-status checking" id="connectionStatus">
+    <span class="dot"></span>
+    <span id="statusText">Mengecek koneksi...</span>
+</div>
+
+<!-- NOTIFICATION -->
+<div class="notification" id="notification">
+    <span id="notifMessage">Pesan</span>
+    <button class="close-notif" id="closeNotif">&times;</button>
+</div>
 
 <!-- LOADING -->
 <div class="loading-overlay" id="loadingOverlay">
@@ -914,7 +1027,7 @@
 
     <div class="subhead">
         <span><i class="fas fa-graduation-cap" style="margin-right: 6px;"></i> Kelola uang jajan & tabungan murid</span>
-        <span style="font-size:0.65rem;color:#1f8a70;" id="statusDb">● Terhubung ke Supabase</span>
+        <span style="font-size:0.65rem;" id="statusDb">● Cloud: Terdeteksi</span>
     </div>
 
     <!-- NAVIGASI HARI -->
@@ -1023,6 +1136,83 @@
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     (function() {
+        // ===== CONNECTION STATUS =====
+        const connectionStatus = document.getElementById('connectionStatus');
+        const statusText = document.getElementById('statusText');
+        const statusDb = document.getElementById('statusDb');
+        const notification = document.getElementById('notification');
+        const notifMessage = document.getElementById('notifMessage');
+        const closeNotif = document.getElementById('closeNotif');
+
+        let isOnline = false;
+        let notifTimeout = null;
+
+        function showNotification(message, type = 'success') {
+            notifMessage.textContent = message;
+            notification.className = `notification show ${type}`;
+            
+            if (notifTimeout) clearTimeout(notifTimeout);
+            notifTimeout = setTimeout(() => {
+                notification.classList.remove('show');
+            }, 5000);
+        }
+
+        closeNotif.addEventListener('click', function() {
+            notification.classList.remove('show');
+            if (notifTimeout) clearTimeout(notifTimeout);
+        });
+
+        async function checkConnection() {
+            // Ubah ke status checking
+            connectionStatus.className = 'connection-status checking';
+            statusText.textContent = 'Mengecek koneksi...';
+            statusDb.textContent = '● Cloud: Memeriksa...';
+            statusDb.style.color = '#f5b342';
+
+            try {
+                // Coba ping ke Supabase
+                const startTime = Date.now();
+                const { data, error } = await supabase
+                    .from('tabungan')
+                    .select('count')
+                    .limit(1);
+
+                const responseTime = Date.now() - startTime;
+
+                if (error) {
+                    throw error;
+                }
+
+                // Koneksi berhasil
+                isOnline = true;
+                connectionStatus.className = 'connection-status online';
+                statusText.textContent = `✅ Cloud Terhubung (${responseTime}ms)`;
+                statusDb.textContent = `● Cloud: Terdeteksi ✅`;
+                statusDb.style.color = '#1f8a70';
+                
+                showNotification('✅ Terhubung ke Supabase Cloud!', 'success');
+                return true;
+
+            } catch (error) {
+                // Koneksi gagal
+                isOnline = false;
+                connectionStatus.className = 'connection-status offline';
+                statusText.textContent = '❌ Cloud Tidak Terdeteksi';
+                statusDb.textContent = '● Cloud: Tidak Terdeteksi ❌';
+                statusDb.style.color = '#bf4b5a';
+                
+                showNotification('❌ Gagal terhubung ke Supabase Cloud! Periksa koneksi internet.', 'error');
+                console.error('Connection error:', error);
+                return false;
+            }
+        }
+
+        // Cek koneksi saat halaman dimuat
+        setTimeout(checkConnection, 500);
+
+        // Cek koneksi setiap 30 detik
+        setInterval(checkConnection, 30000);
+
         // ===== DOM ELEMENTS =====
         const loginPage = document.getElementById('loginPage');
         const appContainer = document.getElementById('appContainer');
@@ -1031,8 +1221,7 @@
         const logoutBtn = document.getElementById('logoutBtn');
         const loadingOverlay = document.getElementById('loadingOverlay');
 
-        // ===== LOGIN SEDERHANA (TANPA HASH) =====
-        // User yang valid: username = 'razalfa', password = 'admin123'
+        // ===== LOGIN SEDERHANA =====
         const VALID_USERNAME = 'razalfa';
         const VALID_PASSWORD = 'admin123';
 
@@ -1396,6 +1585,15 @@
 
             // ===== SUPABASE FUNCTIONS =====
             async function loadData() {
+                // Cek koneksi dulu
+                const connected = await checkConnection();
+                
+                if (!connected) {
+                    showNotification('⚠️ Tidak bisa memuat data karena Cloud tidak terdeteksi!', 'warning');
+                    hideLoading();
+                    return;
+                }
+
                 showLoading();
                 try {
                     const { data, error } = await supabase
@@ -1422,14 +1620,21 @@
                     currentHariIndex = hariKeys.length - 1;
                     render();
                     hideLoading();
+                    showNotification('✅ Data berhasil dimuat dari Cloud!', 'success');
                 } catch (error) {
                     console.error('Error loading data:', error);
-                    alert('Gagal memuat data dari Supabase: ' + error.message);
+                    showNotification('❌ Gagal memuat data: ' + error.message, 'error');
                     hideLoading();
                 }
             }
 
             async function tambahTransaksi(keterangan, nominal, tipe, namaMurid) {
+                // Cek koneksi
+                if (!isOnline) {
+                    showNotification('⚠️ Cloud tidak terdeteksi! Transaksi gagal disimpan.', 'warning');
+                    return false;
+                }
+
                 if (!keterangan || keterangan.trim() === '') {
                     alert('Masukkan keterangan!');
                     return false;
@@ -1480,18 +1685,23 @@
                     if (data && data.length > 0) {
                         transaksiData.push(data[0]);
                         render();
+                        showNotification('✅ Transaksi berhasil disimpan ke Cloud!', 'success');
                     }
                     hideLoading();
                     return true;
                 } catch (error) {
                     console.error('Error adding transaction:', error);
-                    alert('Gagal menambah transaksi: ' + error.message);
+                    showNotification('❌ Gagal menyimpan transaksi: ' + error.message, 'error');
                     hideLoading();
                     return false;
                 }
             }
 
             async function hapusTransaksi(id) {
+                if (!isOnline) {
+                    showNotification('⚠️ Cloud tidak terdeteksi! Gagal menghapus.', 'warning');
+                    return;
+                }
                 if (!confirm('Yakin ingin menghapus transaksi ini?')) return;
                 
                 showLoading();
@@ -1505,15 +1715,20 @@
 
                     transaksiData = transaksiData.filter(t => t.id !== id);
                     render();
+                    showNotification('✅ Transaksi berhasil dihapus!', 'success');
                     hideLoading();
                 } catch (error) {
                     console.error('Error deleting transaction:', error);
-                    alert('Gagal menghapus transaksi: ' + error.message);
+                    showNotification('❌ Gagal menghapus: ' + error.message, 'error');
                     hideLoading();
                 }
             }
 
             async function updateTransaksi(id, keterangan, nominal, namaMurid, tipe) {
+                if (!isOnline) {
+                    showNotification('⚠️ Cloud tidak terdeteksi! Gagal update.', 'warning');
+                    return false;
+                }
                 showLoading();
                 try {
                     const { error } = await supabase
@@ -1539,17 +1754,39 @@
                         };
                     }
                     render();
+                    showNotification('✅ Transaksi berhasil diupdate!', 'success');
                     hideLoading();
                     return true;
                 } catch (error) {
                     console.error('Error updating transaction:', error);
-                    alert('Gagal mengupdate transaksi: ' + error.message);
+                    showNotification('❌ Gagal update: ' + error.message, 'error');
                     hideLoading();
                     return false;
                 }
             }
 
-            async function resetData() {
+            // ===== EVENT BINDING =====
+            document.getElementById('btnTambah').addEventListener('click', function() {
+                const ket = keteranganInput.value || 'Uang masuk';
+                const nom = parseInt(nominalInput.value, 10) || 0;
+                const nama = namaMuridTransaksiInput.value || '';
+                tambahTransaksi(ket, nom, 'masuk', nama);
+            });
+
+            document.getElementById('btnKurang').addEventListener('click', function() {
+                const ket = keteranganInput.value || 'Pengeluaran';
+                const nom = parseInt(nominalInput.value, 10) || 0;
+                let nama = namaMuridTransaksiInput.value || '';
+
+                if (selectedMuridKurangi) {
+                    nama = selectedMuridKurangi;
+                    namaMuridTransaksiInput.value = nama;
+                }
+
+                tambahTransaksi(ket, nom, 'keluar', nama);
+            });
+
+            document.getElementById('btnReset').addEventListener('click', function() {
                 const hari = getCurrentHari();
                 if (!hari) return;
                 
@@ -1558,27 +1795,32 @@
                 
                 if (!confirm('Reset semua transaksi di hari ini?')) return;
                 
+                if (!isOnline) {
+                    showNotification('⚠️ Cloud tidak terdeteksi! Gagal reset.', 'warning');
+                    return;
+                }
+                
                 showLoading();
                 try {
                     const ids = transaksiHari.map(t => t.id);
-                    const { error } = await supabase
-                        .from('tabungan')
-                        .delete()
-                        .in('id', ids);
-
-                    if (error) throw error;
-
-                    transaksiData = transaksiData.filter(t => t.hari_key !== hari);
-                    render();
-                    hideLoading();
+                    supabase.from('tabungan').delete().in('id', ids).then(({ error }) => {
+                        if (error) throw error;
+                        transaksiData = transaksiData.filter(t => t.hari_key !== hari);
+                        render();
+                        showNotification('✅ Data berhasil direset!', 'success');
+                        hideLoading();
+                    }).catch(error => {
+                        console.error('Error resetting data:', error);
+                        showNotification('❌ Gagal reset: ' + error.message, 'error');
+                        hideLoading();
+                    });
                 } catch (error) {
-                    console.error('Error resetting data:', error);
-                    alert('Gagal mereset data: ' + error.message);
+                    console.error('Error:', error);
                     hideLoading();
                 }
-            }
+            });
 
-            async function hapusSemuaTransaksi() {
+            document.getElementById('hapusSemua').addEventListener('click', function() {
                 const hari = getCurrentHari();
                 if (!hari) return;
                 
@@ -1590,27 +1832,32 @@
                 
                 if (!confirm('Hapus SEMUA transaksi di hari ini?')) return;
                 
+                if (!isOnline) {
+                    showNotification('⚠️ Cloud tidak terdeteksi! Gagal hapus.', 'warning');
+                    return;
+                }
+                
                 showLoading();
                 try {
                     const ids = transaksiHari.map(t => t.id);
-                    const { error } = await supabase
-                        .from('tabungan')
-                        .delete()
-                        .in('id', ids);
-
-                    if (error) throw error;
-
-                    transaksiData = transaksiData.filter(t => t.hari_key !== hari);
-                    render();
-                    hideLoading();
+                    supabase.from('tabungan').delete().in('id', ids).then(({ error }) => {
+                        if (error) throw error;
+                        transaksiData = transaksiData.filter(t => t.hari_key !== hari);
+                        render();
+                        showNotification('✅ Semua transaksi dihapus!', 'success');
+                        hideLoading();
+                    }).catch(error => {
+                        console.error('Error deleting all:', error);
+                        showNotification('❌ Gagal hapus: ' + error.message, 'error');
+                        hideLoading();
+                    });
                 } catch (error) {
-                    console.error('Error deleting all transactions:', error);
-                    alert('Gagal menghapus semua transaksi: ' + error.message);
+                    console.error('Error:', error);
                     hideLoading();
                 }
-            }
+            });
 
-            async function tambahHariBaru() {
+            document.getElementById('tambahHari').addEventListener('click', function() {
                 const today = getTanggalKey();
                 const existingKeys = hariKeys.filter(k => k.startsWith(today));
                 const hariKe = existingKeys.length + 1;
@@ -1625,17 +1872,85 @@
                 hariKeys.sort();
                 currentHariIndex = hariKeys.length - 1;
                 render();
-            }
+            });
 
-            function pindahHari(direction) {
-                const newIndex = currentHariIndex + direction;
-                if (newIndex < 0 || newIndex >= hariKeys.length) return;
+            document.getElementById('prevDay').addEventListener('click', function() {
+                const newIndex = currentHariIndex - 1;
+                if (newIndex < 0) return;
                 currentHariIndex = newIndex;
                 filterMurid = 'semua';
                 filterSelect.value = 'semua';
                 selectedMuridKurangi = null;
                 render();
-            }
+            });
+
+            document.getElementById('nextDay').addEventListener('click', function() {
+                const newIndex = currentHariIndex + 1;
+                if (newIndex >= hariKeys.length) return;
+                currentHariIndex = newIndex;
+                filterMurid = 'semua';
+                filterSelect.value = 'semua';
+                selectedMuridKurangi = null;
+                render();
+            });
+
+            filterSelect.addEventListener('change', function() {
+                filterMurid = this.value;
+                render();
+            });
+
+            resetFilterBtn.addEventListener('click', function() {
+                filterSelect.value = 'semua';
+                filterMurid = 'semua';
+                render();
+            });
+
+            modalEditSimpan.addEventListener('click', async function() {
+                const id = editingId;
+                if (id === null) return;
+                
+                const keterangan = editKeterangan.value.trim() || 'Tanpa keterangan';
+                const nominal = parseInt(editNominal.value) || 0;
+                const namaMurid = editNamaMurid.value.trim() || '';
+                const tipe = editTipe.value;
+                
+                if (nominal <= 0) {
+                    alert('Nominal harus lebih dari 0!');
+                    return;
+                }
+                
+                await updateTransaksi(id, keterangan, nominal, namaMurid, tipe);
+                tutupModalEdit();
+            });
+
+            modalEditBatal.addEventListener('click', function() {
+                tutupModalEdit();
+            });
+
+            modalEdit.addEventListener('click', function(e) {
+                if (e.target === modalEdit) tutupModalEdit();
+            });
+
+            editNominal.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    modalEditSimpan.click();
+                }
+            });
+
+            nominalInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('btnTambah').click();
+                }
+            });
+
+            keteranganInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    nominalInput.focus();
+                }
+            });
 
             function bukaModalEdit(id) {
                 const t = transaksiData.find(t => t.id === id);
@@ -1655,102 +1970,10 @@
                 editingId = null;
             }
 
-            async function simpanEdit() {
-                const id = editingId;
-                if (id === null) return;
-                
-                const keterangan = editKeterangan.value.trim() || 'Tanpa keterangan';
-                const nominal = parseInt(editNominal.value) || 0;
-                const namaMurid = editNamaMurid.value.trim() || '';
-                const tipe = editTipe.value;
-                
-                if (nominal <= 0) {
-                    alert('Nominal harus lebih dari 0!');
-                    return;
-                }
-                
-                await updateTransaksi(id, keterangan, nominal, namaMurid, tipe);
-                tutupModalEdit();
-            }
-
-            function handleTambah() {
-                const ket = keteranganInput.value || 'Uang masuk';
-                const nom = parseInt(nominalInput.value, 10) || 0;
-                const nama = namaMuridTransaksiInput.value || '';
-                tambahTransaksi(ket, nom, 'masuk', nama);
-            }
-
-            function handleKurang() {
-                const ket = keteranganInput.value || 'Pengeluaran';
-                const nom = parseInt(nominalInput.value, 10) || 0;
-                let nama = namaMuridTransaksiInput.value || '';
-
-                if (selectedMuridKurangi) {
-                    nama = selectedMuridKurangi;
-                    namaMuridTransaksiInput.value = nama;
-                }
-
-                tambahTransaksi(ket, nom, 'keluar', nama);
-            }
-
-            function applyFilter() {
-                const selectedValue = filterSelect.value;
-                filterMurid = selectedValue;
-                render();
-            }
-
-            function resetFilter() {
-                filterSelect.value = 'semua';
-                filterMurid = 'semua';
-                render();
-            }
-
             // ===== INISIALISASI =====
             await loadData();
 
-            // ===== EVENT BINDING =====
-            document.getElementById('btnTambah').addEventListener('click', handleTambah);
-            document.getElementById('btnKurang').addEventListener('click', handleKurang);
-            document.getElementById('btnReset').addEventListener('click', resetData);
-            document.getElementById('hapusSemua').addEventListener('click', hapusSemuaTransaksi);
-            document.getElementById('tambahHari').addEventListener('click', tambahHariBaru);
-            document.getElementById('prevDay').addEventListener('click', function() { pindahHari(-1); });
-            document.getElementById('nextDay').addEventListener('click', function() { pindahHari(1); });
-
-            filterSelect.addEventListener('change', applyFilter);
-            resetFilterBtn.addEventListener('click', resetFilter);
-
-            modalEditSimpan.addEventListener('click', simpanEdit);
-            modalEditBatal.addEventListener('click', tutupModalEdit);
-            modalEdit.addEventListener('click', (e) => {
-                if (e.target === modalEdit) tutupModalEdit();
-            });
-            editNominal.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') simpanEdit();
-            });
-
-            nominalInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleTambah();
-                }
-            });
-            keteranganInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    nominalInput.focus();
-                }
-            });
-
-            console.log('📘 Tabungan Murid dengan Supabase siap!');
-        }
-
-        // ===== CHECK SESSION =====
-        if (checkSession()) {
-            initApp();
-        } else {
-            loginPage.classList.add('active');
-            appContainer.classList.remove('active');
+            console.log('📘 Tabungan Murid dengan Cloud Detection siap!');
         }
 
         console.log('🔐 Tabungan Murid siap!');
