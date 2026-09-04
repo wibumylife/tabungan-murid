@@ -46,11 +46,6 @@
             color: white;
             border: 1px solid rgba(196, 79, 92, 0.3);
         }
-        .connection-status.checking {
-            background: rgba(245, 179, 66, 0.9);
-            color: white;
-            border: 1px solid rgba(245, 179, 66, 0.3);
-        }
         .connection-status .dot {
             width: 10px;
             height: 10px;
@@ -62,14 +57,6 @@
         }
         .connection-status.offline .dot {
             background: #ff8a8a;
-        }
-        .connection-status.checking .dot {
-            background: #fff;
-            animation: blink 0.8s infinite;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.2; }
         }
 
         .notification {
@@ -972,9 +959,9 @@
 <body>
 
 <!-- CONNECTION STATUS -->
-<div class="connection-status online" id="connectionStatus">
+<div class="connection-status offline" id="connectionStatus">
     <span class="dot"></span>
-    <span id="statusText">✅ Mode Offline</span>
+    <span id="statusText">⏳ Menghubungkan...</span>
 </div>
 
 <!-- NOTIFICATION -->
@@ -1026,7 +1013,7 @@
 
     <div class="subhead">
         <span><i class="fas fa-graduation-cap" style="margin-right: 6px;"></i> Kelola uang jajan & tabungan murid</span>
-        <span style="font-size:0.65rem;color:#1f8a70;" id="statusDb">💾 Mode Offline</span>
+        <span style="font-size:0.65rem;" id="statusDb">⏳ Menghubungkan...</span>
     </div>
 
     <!-- NAVIGASI HARI -->
@@ -1103,7 +1090,7 @@
         <div class="kosong"><i class="fas fa-inbox" style="margin-right: 8px;"></i>Belum ada transaksi</div>
     </div>
     <div class="footer-note">
-        <i class="fas fa-database"></i> data tersimpan di Local Storage
+        <i class="fas fa-database"></i> data tersimpan di Supabase
     </div>
 </div>
 
@@ -1126,11 +1113,17 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
     // ==========================================
-    // VERSI OFFLINE - PAKAI LOCAL STORAGE
-    // TIDAK PERLU SUPABASE
+    // VERSI ONLINE - PAKAI SUPABASE
     // ==========================================
+
+    // KONFIGURASI SUPABASE ANDA
+    const SUPABASE_URL = 'https://vmfkighwxdencihglaei.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZmtpZ2h3eGRlbmNpaGdsYWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MjE2NTUsImV4cCI6MjEwNDA5NzY1NX0.8ErYoCFK5t8HDuuCl3fw4wFdSI-3BqniXmIxjSXVCVQ';
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     (function() {
         // ===== DOM ELEMENTS =====
@@ -1140,10 +1133,63 @@
         const loginError = document.getElementById('loginError');
         const logoutBtn = document.getElementById('logoutBtn');
         const loadingOverlay = document.getElementById('loadingOverlay');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const statusText = document.getElementById('statusText');
+        const statusDb = document.getElementById('statusDb');
+        const notification = document.getElementById('notification');
+        const notifMessage = document.getElementById('notifMessage');
+        const closeNotif = document.getElementById('closeNotif');
 
         const VALID_USERNAME = 'razalfa';
         const VALID_PASSWORD = 'admin123';
 
+        let isOnline = false;
+        let notifTimeout = null;
+
+        // ===== NOTIFICATION =====
+        function showNotification(message, type = 'success') {
+            notifMessage.textContent = message;
+            notification.className = `notification show ${type}`;
+            
+            if (notifTimeout) clearTimeout(notifTimeout);
+            notifTimeout = setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+
+        closeNotif.addEventListener('click', function() {
+            notification.classList.remove('show');
+            if (notifTimeout) clearTimeout(notifTimeout);
+        });
+
+        // ===== CHECK CONNECTION =====
+        async function checkConnection() {
+            try {
+                const { data, error } = await supabase
+                    .from('tabungan')
+                    .select('count', { count: 'exact', head: true });
+
+                if (error) throw error;
+
+                isOnline = true;
+                connectionStatus.className = 'connection-status online';
+                statusText.textContent = '✅ Online';
+                statusDb.textContent = '✅ Cloud: Online';
+                statusDb.style.color = '#1f8a70';
+                return true;
+
+            } catch (error) {
+                isOnline = false;
+                connectionStatus.className = 'connection-status offline';
+                statusText.textContent = '❌ Offline';
+                statusDb.textContent = '❌ Cloud: Offline';
+                statusDb.style.color = '#bf4b5a';
+                console.error('Connection error:', error.message);
+                return false;
+            }
+        }
+
+        // ===== LOADING =====
         function showLoading() {
             loadingOverlay.classList.add('active');
         }
@@ -1152,6 +1198,7 @@
             loadingOverlay.classList.remove('active');
         }
 
+        // ===== AUTH =====
         function checkSession() {
             const session = localStorage.getItem('tabunganSiswa_session');
             if (session === 'logged_in') {
@@ -1193,6 +1240,9 @@
 
         logoutBtn.addEventListener('click', doLogout);
 
+        // Cek koneksi awal
+        checkConnection();
+
         if (checkSession()) {
             initApp();
         } else {
@@ -1201,9 +1251,9 @@
         }
 
         // ==========================================
-        // APP LOGIC - OFFLINE VERSION
+        // APP LOGIC - ONLINE VERSION
         // ==========================================
-        function initApp() {
+        async function initApp() {
             let transaksiData = [];
             let hariKeys = [];
             let currentHariIndex = 0;
@@ -1455,7 +1505,7 @@
                         const colorClass = isMasuk ? 'nominal-masuk' : 'nominal-keluar';
                         const sign = isMasuk ? '+' : '-';
                         const nominalStr = formatRupiah(t.nominal);
-                        const waktu = new Date(t.id).toLocaleString('id-ID', {
+                        const waktu = new Date(t.created_at).toLocaleString('id-ID', {
                             hour: '2-digit',
                             minute: '2-digit',
                             day: 'numeric',
@@ -1502,61 +1552,53 @@
                 updateFilterOptions();
                 renderPilihanMurid();
                 updateHariLabel();
-                simpanState();
             }
 
-            // ===== LOCAL STORAGE FUNCTIONS =====
-            function simpanState() {
-                const data = {
-                    transaksi: transaksiData,
-                    hariKeys: hariKeys,
-                    currentHariIndex: currentHariIndex
-                };
-                localStorage.setItem('tabunganMurid_data', JSON.stringify(data));
-            }
+            // ==========================================
+            // SUPABASE CRUD FUNCTIONS
+            // ==========================================
+            
+            async function loadData() {
+                showLoading();
+                try {
+                    const { data, error } = await supabase
+                        .from('tabungan')
+                        .select('*')
+                        .order('created_at', { ascending: false });
 
-            function muatState() {
-                const stored = localStorage.getItem('tabunganMurid_data');
-                if (stored) {
-                    try {
-                        const parsed = JSON.parse(stored);
-                        transaksiData = parsed.transaksi || [];
-                        hariKeys = parsed.hariKeys || [];
-                        currentHariIndex = parsed.currentHariIndex || 0;
-                        
-                        if (hariKeys.length === 0) {
-                            const today = getTanggalKey();
-                            const key = `${today}|Hari 1`;
-                            hariKeys = [key];
-                            transaksiData = [];
-                        }
-                    } catch (e) {
-                        // Reset data
+                    if (error) throw error;
+
+                    transaksiData = data || [];
+                    
+                    const hariSet = new Set();
+                    transaksiData.forEach(t => {
+                        if (t.hari_key) hariSet.add(t.hari_key);
+                    });
+                    hariKeys = Array.from(hariSet).sort();
+                    
+                    if (hariKeys.length === 0) {
                         const today = getTanggalKey();
                         const key = `${today}|Hari 1`;
                         hariKeys = [key];
-                        transaksiData = [];
-                        currentHariIndex = 0;
                     }
-                } else {
-                    // Data awal
-                    const today = getTanggalKey();
-                    const key = `${today}|Hari 1`;
-                    hariKeys = [key];
-                    transaksiData = [
-                        { id: Date.now() - 100000, keterangan: 'Uang saku', nominal: 20000, tipe: 'masuk', nama_murid: 'Budi', hari_key: key },
-                        { id: Date.now() - 80000, keterangan: 'Uang saku', nominal: 15000, tipe: 'masuk', nama_murid: 'Ani', hari_key: key },
-                        { id: Date.now() - 50000, keterangan: 'Beli buku', nominal: 12000, tipe: 'keluar', nama_murid: 'Budi', hari_key: key },
-                        { id: Date.now() - 30000, keterangan: 'Jajan', nominal: 5000, tipe: 'keluar', nama_murid: 'Cici', hari_key: key },
-                        { id: Date.now() - 10000, keterangan: 'Uang saku', nominal: 25000, tipe: 'masuk', nama_murid: 'Dedi', hari_key: key },
-                    ];
-                    currentHariIndex = 0;
+                    
+                    currentHariIndex = hariKeys.length - 1;
+                    render();
+                    hideLoading();
+                    showNotification('✅ Data berhasil dimuat!', 'success');
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                    showNotification('❌ Gagal memuat data: ' + error.message, 'error');
+                    hideLoading();
                 }
-                namaMuridTransaksiInput.value = '';
             }
 
-            // ===== CRUD FUNCTIONS =====
-            function tambahTransaksi(keterangan, nominal, tipe, namaMurid) {
+            async function tambahTransaksi(keterangan, nominal, tipe, namaMurid) {
+                if (!isOnline) {
+                    showNotification('⚠️ Tidak ada koneksi! Coba lagi nanti.', 'warning');
+                    return false;
+                }
+
                 if (!keterangan || keterangan.trim() === '') {
                     alert('Masukkan keterangan!');
                     return false;
@@ -1586,61 +1628,178 @@
                     }
                 }
 
-                const newTrans = {
-                    id: Date.now(),
-                    keterangan: keterangan.trim(),
-                    nominal: nom,
-                    tipe: tipe,
-                    nama_murid: nama,
-                    hari_key: hari
-                };
-                transaksiData.push(newTrans);
-                render();
-                return true;
+                showLoading();
+                try {
+                    const newTrans = {
+                        keterangan: keterangan.trim(),
+                        nominal: nom,
+                        tipe: tipe,
+                        nama_murid: nama,
+                        hari_key: hari,
+                        created_at: new Date().toISOString()
+                    };
+
+                    const { data, error } = await supabase
+                        .from('tabungan')
+                        .insert([newTrans])
+                        .select();
+
+                    if (error) throw error;
+
+                    if (data && data.length > 0) {
+                        transaksiData.push(data[0]);
+                        render();
+                        showNotification('✅ Transaksi berhasil disimpan!', 'success');
+                    }
+                    hideLoading();
+                    return true;
+                } catch (error) {
+                    console.error('Error adding transaction:', error);
+                    showNotification('❌ Gagal menyimpan transaksi: ' + error.message, 'error');
+                    hideLoading();
+                    return false;
+                }
             }
 
-            function hapusTransaksi(id) {
+            async function hapusTransaksi(id) {
+                if (!isOnline) {
+                    showNotification('⚠️ Tidak ada koneksi!', 'warning');
+                    return;
+                }
                 if (!confirm('Yakin ingin menghapus transaksi ini?')) return;
-                transaksiData = transaksiData.filter(t => t.id !== id);
-                render();
-            }
-
-            function updateTransaksi(id, keterangan, nominal, namaMurid, tipe) {
-                const index = transaksiData.findIndex(t => t.id === id);
-                if (index === -1) return false;
                 
-                transaksiData[index] = {
-                    ...transaksiData[index],
-                    keterangan: keterangan,
-                    nominal: nominal,
-                    nama_murid: namaMurid,
-                    tipe: tipe
-                };
-                render();
-                return true;
+                showLoading();
+                try {
+                    const { error } = await supabase
+                        .from('tabungan')
+                        .delete()
+                        .eq('id', id);
+
+                    if (error) throw error;
+
+                    transaksiData = transaksiData.filter(t => t.id !== id);
+                    render();
+                    showNotification('✅ Transaksi berhasil dihapus!', 'success');
+                    hideLoading();
+                } catch (error) {
+                    console.error('Error deleting transaction:', error);
+                    showNotification('❌ Gagal menghapus: ' + error.message, 'error');
+                    hideLoading();
+                }
             }
 
-            function resetData() {
+            async function updateTransaksi(id, keterangan, nominal, namaMurid, tipe) {
+                if (!isOnline) {
+                    showNotification('⚠️ Tidak ada koneksi!', 'warning');
+                    return false;
+                }
+                showLoading();
+                try {
+                    const { error } = await supabase
+                        .from('tabungan')
+                        .update({
+                            keterangan: keterangan,
+                            nominal: nominal,
+                            nama_murid: namaMurid,
+                            tipe: tipe
+                        })
+                        .eq('id', id);
+
+                    if (error) throw error;
+
+                    const index = transaksiData.findIndex(t => t.id === id);
+                    if (index !== -1) {
+                        transaksiData[index] = {
+                            ...transaksiData[index],
+                            keterangan: keterangan,
+                            nominal: nominal,
+                            nama_murid: namaMurid,
+                            tipe: tipe
+                        };
+                    }
+                    render();
+                    showNotification('✅ Transaksi berhasil diupdate!', 'success');
+                    hideLoading();
+                    return true;
+                } catch (error) {
+                    console.error('Error updating transaction:', error);
+                    showNotification('❌ Gagal update: ' + error.message, 'error');
+                    hideLoading();
+                    return false;
+                }
+            }
+
+            async function resetData() {
                 const hari = getCurrentHari();
                 if (!hari) return;
+                
                 const transaksiHari = transaksiData.filter(t => t.hari_key === hari);
                 if (transaksiHari.length === 0) return;
+                
                 if (!confirm('Reset semua transaksi di hari ini?')) return;
-                transaksiData = transaksiData.filter(t => t.hari_key !== hari);
-                render();
+                
+                if (!isOnline) {
+                    showNotification('⚠️ Tidak ada koneksi!', 'warning');
+                    return;
+                }
+                
+                showLoading();
+                try {
+                    const ids = transaksiHari.map(t => t.id);
+                    const { error } = await supabase
+                        .from('tabungan')
+                        .delete()
+                        .in('id', ids);
+
+                    if (error) throw error;
+
+                    transaksiData = transaksiData.filter(t => t.hari_key !== hari);
+                    render();
+                    showNotification('✅ Data berhasil direset!', 'success');
+                    hideLoading();
+                } catch (error) {
+                    console.error('Error resetting data:', error);
+                    showNotification('❌ Gagal reset: ' + error.message, 'error');
+                    hideLoading();
+                }
             }
 
-            function hapusSemuaTransaksi() {
+            async function hapusSemuaTransaksi() {
                 const hari = getCurrentHari();
                 if (!hari) return;
+                
                 const transaksiHari = transaksiData.filter(t => t.hari_key === hari);
                 if (transaksiHari.length === 0) {
                     alert('Tidak ada transaksi untuk dihapus.');
                     return;
                 }
+                
                 if (!confirm('Hapus SEMUA transaksi di hari ini?')) return;
-                transaksiData = transaksiData.filter(t => t.hari_key !== hari);
-                render();
+                
+                if (!isOnline) {
+                    showNotification('⚠️ Tidak ada koneksi!', 'warning');
+                    return;
+                }
+                
+                showLoading();
+                try {
+                    const ids = transaksiHari.map(t => t.id);
+                    const { error } = await supabase
+                        .from('tabungan')
+                        .delete()
+                        .in('id', ids);
+
+                    if (error) throw error;
+
+                    transaksiData = transaksiData.filter(t => t.hari_key !== hari);
+                    render();
+                    showNotification('✅ Semua transaksi dihapus!', 'success');
+                    hideLoading();
+                } catch (error) {
+                    console.error('Error deleting all:', error);
+                    showNotification('❌ Gagal hapus: ' + error.message, 'error');
+                    hideLoading();
+                }
             }
 
             function tambahHariBaru() {
@@ -1738,8 +1897,7 @@
             }
 
             // ===== INISIALISASI =====
-            muatState();
-            render();
+            await loadData();
 
             // ===== EVENT BINDING =====
             document.getElementById('btnTambah').addEventListener('click', handleTambah);
@@ -1775,7 +1933,7 @@
                 }
             });
 
-            console.log('📘 Tabungan Murid - Mode Offline siap!');
+            console.log('📘 Tabungan Murid - Online siap!');
         }
 
         console.log('🔐 Tabungan Murid siap!');
