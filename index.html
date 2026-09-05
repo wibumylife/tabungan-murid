@@ -88,11 +88,6 @@
             color: #bf4b5a;
             border-left: 4px solid #bf4b5a;
         }
-        .notification.warning {
-            background: rgba(245, 179, 66, 0.15);
-            color: #b8860b;
-            border-left: 4px solid #f5b342;
-        }
         .notification .close-notif {
             background: transparent;
             border: none;
@@ -1116,13 +1111,18 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
     // ==========================================
-    // VERSI ONLINE - PAKAI SUPABASE
+    // KONFIGURASI SUPABASE - UDAH BENER
     // ==========================================
-
-    // KONFIGURASI SUPABASE ANDA
     const SUPABASE_URL = 'https://vmfkighwxdencihglaei.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZmtpZ2h3eGRlbmNpaGdsYWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MjE2NTUsImV4cCI6MjEwNDA5NzY1NX0.8ErYoCFK5t8HDuuCl3fw4wFdSI-3BqniXmIxjSXVCVQ'
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZtZmtpZ2h3eGRlbmNpaGdsYWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MjE2NTUsImV4cCI6MjEwNDA5NzY1NX0.8ErYoCFK5t8HDuuCl3fw4wFdSI-3BqniXmIxjSXVCVQ';
+
+    // BUAT CLIENT SUPABASE DENGAN HEADER YANG BENER
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY
+        }
+    });
 
     (function() {
         // ===== DOM ELEMENTS =====
@@ -1168,13 +1168,17 @@
                     .from('tabungan')
                     .select('count', { count: 'exact', head: true });
 
-                if (error) throw error;
+                if (error) {
+                    console.error('Supabase error:', error);
+                    throw error;
+                }
 
                 isOnline = true;
                 connectionStatus.className = 'connection-status online';
                 statusText.textContent = '✅ Online';
                 statusDb.textContent = '✅ Cloud: Online';
                 statusDb.style.color = '#1f8a70';
+                showNotification('✅ Terhubung ke Supabase!', 'success');
                 return true;
 
             } catch (error) {
@@ -1183,7 +1187,16 @@
                 statusText.textContent = '❌ Offline';
                 statusDb.textContent = '❌ Cloud: Offline';
                 statusDb.style.color = '#bf4b5a';
-                console.error('Connection error:', error.message);
+                
+                // TAMPILKAN ERROR YANG JELAS
+                let pesanError = error.message;
+                if (pesanError.includes('relation "tabungan" does not exist')) {
+                    pesanError = 'Tabel "tabungan" belum dibuat! Jalankan SQL di Supabase.';
+                } else if (pesanError.includes('Invalid API key')) {
+                    pesanError = 'API Key salah! Cek kembali konfigurasi.';
+                }
+                showNotification('❌ ' + pesanError, 'error');
+                console.error('Connection error:', error);
                 return false;
             }
         }
@@ -1240,7 +1253,7 @@
         logoutBtn.addEventListener('click', doLogout);
 
         // Cek koneksi awal
-        checkConnection();
+        setTimeout(checkConnection, 500);
 
         if (checkSession()) {
             initApp();
@@ -1587,7 +1600,11 @@
                     showNotification('✅ Data berhasil dimuat!', 'success');
                 } catch (error) {
                     console.error('Error loading data:', error);
-                    showNotification('❌ Gagal memuat data: ' + error.message, 'error');
+                    let pesanError = error.message;
+                    if (pesanError.includes('relation "tabungan" does not exist')) {
+                        pesanError = 'Tabel "tabungan" belum dibuat! Jalankan SQL di Supabase.';
+                    }
+                    showNotification('❌ ' + pesanError, 'error');
                     hideLoading();
                 }
             }
